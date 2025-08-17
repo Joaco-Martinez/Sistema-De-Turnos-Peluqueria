@@ -1,15 +1,47 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "postgresql" // o "mysql" / "sqlite"
   url      = env("DATABASE_URL")
+}
+
+ enum BookingStatus {
+  SCHEDULED
+  CANCELED
+  DONE
+}
+
+model Client {
+  id        String    @id @default(cuid())
+  name      String
+  phone     String    @unique
+  notes     String? 
+
+  bookings  Booking[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Booking {
+  id               String        @id @default(cuid())
+  clientId         String
+  client           Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+
+  seriesId         String?  @db.VarChar(64)
+
+  startsAt         DateTime      // inicio del turno
+  durationMinutes  Int           // 30, 45, 60...
+  status           BookingStatus @default(SCHEDULED)
+  serviceName      String?       // opcional: "Corte", "Tinte", etc.
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([clientId])
+  @@index([startsAt])
+  // Evitar superposiciones por horario exacto (se refuerza por código)
 }
