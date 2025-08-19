@@ -1,4 +1,7 @@
-import { DateTime } from 'luxon';
+import { DateTime, Settings  } from 'luxon';
+
+Settings.defaultLocale = 'es';
+
 
 export const toISO = (d: Date | string) =>
   (typeof d === 'string' ? DateTime.fromISO(d) : DateTime.fromJSDate(d)).toISO();
@@ -9,8 +12,11 @@ export const startOfWeekISO = (ref = DateTime.now()) =>
 export const endOfWeekISO = (ref = DateTime.now()) =>
   ref.endOf('week').toISO();
 
-export function fmtDay(dtISO: string) {
-  return DateTime.fromISO(dtISO).toFormat('EEE dd/LL');
+export function fmtDay(dtISO: string, style: 'short' | 'long' = 'short') {
+  const dt = DateTime.fromISO(dtISO).setLocale('es');
+  // 'ccc' = lun, mar, mié... | 'cccc' = lunes, martes, miércoles...
+  const token = style === 'long' ? 'cccc' : 'ccc';
+  return dt.toFormat(`${token} dd/LL`);
 }
 export function fmtTime(dtISO: string) {
   return DateTime.fromISO(dtISO).toFormat('HH:mm');
