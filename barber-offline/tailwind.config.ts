@@ -1,8 +1,6 @@
-import type { Config } from 'tailwindcss';
-
-export default {
-  darkMode: 'media',
-  content: ['./src/**/*.{ts,tsx,js,jsx}'],
+module.exports = {
+  darkMode: 'class',
+  content: ['./src/**/*.{js,ts,jsx,tsx}'],
   theme: { extend: {} },
   plugins: [],
-} satisfies Config;
+};

@@ -4,6 +4,7 @@ import { DateTime } from 'luxon';
 import { getOccurrences } from '@/lib/schedule';
 import { endOfWeekISO, fmtDay, fmtTime, startOfWeekISO } from '@/lib/time';
 import AppointmentForm from './AppointmentForm';
+import { useTheme } from '../context/ThemeContext'; // ⬅️ usamos el contexto
 
 type Occ = { id: string; start: string; end: string; title?: string; clientId?: string };
 type EditTarget = { baseId: string; start: string; end: string; title?: string };
@@ -30,6 +31,11 @@ export default function WeekView({ onChanged }: Props) {
   const [openFormAt, setOpenFormAt] = useState<string | undefined>();
   const [editing, setEditing] = useState<EditTarget | undefined>();
 
+  // ⬇️ Tema desde el contexto
+  const { theme, toggleTheme } = useTheme();
+  const themeIcon = theme === 'dark' ? '☀️' : '🌙';
+  const themeLabel = theme === 'dark' ? 'Claro' : 'Oscuro';
+
   async function load() {
     const occs = await getOccurrences(startOfWeekISO(ref), endOfWeekISO(ref));
     setItems(occs.sort((a, b) => a.start.localeCompare(b.start)));
@@ -44,7 +50,7 @@ export default function WeekView({ onChanged }: Props) {
   const isThisWeek = ref.hasSame(DateTime.now(), 'week');
 
   const openEditor = (e: MouseEvent, data: EditTarget) => {
-    e.stopPropagation(); // evita que el click en el turno dispare "nuevo"
+    e.stopPropagation();
     setEditing(data);
   };
 
@@ -95,12 +101,24 @@ export default function WeekView({ onChanged }: Props) {
           })()}
         </nav>
 
-        {/* Rango + acción principal */}
+        {/* Rango + acciones (incluye botón de tema del contexto) */}
         <div className="flex items-center gap-3">
           <span className="hidden sm:inline-flex items-center rounded-full border border-zinc-200 dark:border-zinc-800
                            bg-white/70 dark:bg-neutral-900/70 px-3 py-1 text-sm text-zinc-600 dark:text-zinc-300">
             {ref.startOf('week').setLocale('es').toFormat('dd LLL')} – {ref.endOf('week').setLocale('es').toFormat('dd LLL yyyy')}
           </span>
+
+          {/* Toggle de tema usando el contexto */}
+          <button
+            onClick={toggleTheme}
+            className="inline-flex items-center gap-2 rounded-full px-3 py-2 border border-zinc-200 dark:border-zinc-700
+                       bg-white/70 dark:bg-neutral-900/70 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+            title={`Cambiar a ${themeLabel.toLowerCase()}`}
+            aria-label="Cambiar tema"
+          >
+            <span aria-hidden>{themeIcon}</span>
+            {themeLabel}
+          </button>
 
           <button
             className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-sky-600 text-white hover:bg-sky-500 shadow-sm
@@ -145,7 +163,6 @@ export default function WeekView({ onChanged }: Props) {
                   {days.map((d, di) => {
                     const isTodayCol = d.hasSame(DateTime.now(), 'day');
 
-                    // ¿Hay un turno que COMIENZA en esta celda? (para subir z-index del contenedor)
                     const startsHere = items.some(i => {
                       const s = DateTime.fromISO(i.start);
                       return s.hasSame(d, 'day') && s.hour === hour && s.minute === minute;
@@ -154,10 +171,8 @@ export default function WeekView({ onChanged }: Props) {
                     return (
                       <div
                         key={`${row}-${di}`}
-                        // overflow-visible para que el bloque se extienda; z-20 si hay bloque aquí (padre por encima de filas siguientes en iOS)
                         className={`h-12 border border-l-0 border-t-0 border-zinc-200 dark:border-zinc-800 relative overflow-visible ${startsHere ? 'z-20' : 'z-0'}
                                     ${isTodayCol ? 'bg-sky-50 dark:bg-sky-950/20' : 'bg-white/40 dark:bg-neutral-900/40'}`}
-                        // 1 solo click: crear turno
                         onClick={() => setOpenFormAt(slotISO(d, hour, minute))}
                         title="Click para nuevo turno"
                       >
@@ -185,7 +200,6 @@ export default function WeekView({ onChanged }: Props) {
                                     title: i.title,
                                   })
                                 }
-                                // top-0 + z-20 = el bloque queda arriba y no se corta
                                 className={`absolute inset-x-1 top-0 z-20 text-left rounded-xl px-2 py-1 text-xs shadow-sm border
                                   ${isPast
                                     ? 'border-zinc-300 bg-zinc-200/50 text-zinc-700 dark:border-zinc-700 dark:bg-neutral-800/40 dark:text-zinc-300'
