@@ -4,7 +4,6 @@ import { DateTime } from 'luxon';
 import { getOccurrences } from '@/lib/schedule';
 import { endOfWeekISO, fmtDay, fmtTime, startOfWeekISO } from '@/lib/time';
 import AppointmentForm from './AppointmentForm';
-import { useTheme } from '../context/ThemeContext'; // ⬅️ usamos el contexto
 
 type Occ = { id: string; start: string; end: string; title?: string; clientId?: string };
 type EditTarget = { baseId: string; start: string; end: string; title?: string };
@@ -32,9 +31,7 @@ export default function WeekView({ onChanged }: Props) {
   const [editing, setEditing] = useState<EditTarget | undefined>();
 
   // ⬇️ Tema desde el contexto
-  const { theme, toggleTheme } = useTheme();
-  const themeIcon = theme === 'dark' ? '☀️' : '🌙';
-  const themeLabel = theme === 'dark' ? 'Claro' : 'Oscuro';
+
 
   async function load() {
     const occs = await getOccurrences(startOfWeekISO(ref), endOfWeekISO(ref));
@@ -109,16 +106,7 @@ export default function WeekView({ onChanged }: Props) {
           </span>
 
           {/* Toggle de tema usando el contexto */}
-          <button
-            onClick={toggleTheme}
-            className="inline-flex items-center gap-2 rounded-full px-3 py-2 border border-zinc-200 dark:border-zinc-700
-                       bg-white/70 dark:bg-neutral-900/70 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-            title={`Cambiar a ${themeLabel.toLowerCase()}`}
-            aria-label="Cambiar tema"
-          >
-            <span aria-hidden>{themeIcon}</span>
-            {themeLabel}
-          </button>
+       
 
           <button
             className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-sky-600 text-white hover:bg-sky-500 shadow-sm
