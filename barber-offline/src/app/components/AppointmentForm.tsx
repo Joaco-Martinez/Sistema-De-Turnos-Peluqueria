@@ -21,7 +21,7 @@ export default function AppointmentForm({
   onSaved,
 }: Props) {
   const [title, setTitle] = useState('');
-  const [durationMin, setDurationMin] = useState(45);
+  const [durationMin, setDurationMin] = useState(30);
   const [startISO, setStartISO] = useState(defaultStart ?? DateTime.now().toISO()!);
   const [isRecurring, setIsRecurring] = useState(false);
   const [freq, setFreq] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('WEEKLY');
@@ -150,7 +150,7 @@ export default function AppointmentForm({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className={inputCls}
-              placeholder="Juan / Corte 45m"
+              placeholder="Juan / Corte 30m"
             />
           </label>
 
@@ -169,15 +169,24 @@ export default function AppointmentForm({
                 className={inputCls}
               />
             </label>
-            <label className="block">
-              <span className="text-sm text-zinc-700 dark:text-zinc-300">Duración (min)</span>
-              <input
-                type="number" min={15} step={15}
-                value={durationMin}
-                onChange={(e) => setDurationMin(+e.target.value)}
-                className={inputCls}
-              />
-            </label>
+           <label className="block">
+  <span className="text-sm text-zinc-700 dark:text-zinc-300">Duración (min)</span>
+  <input
+    type="number"
+    min={15}
+    step={15}
+    value={durationMin === null || Number.isNaN(durationMin) ? "" : durationMin}
+    onChange={(e) => {
+      const val = e.target.value;
+      if (val === "") {
+        setDurationMin(NaN); // guardo NaN internamente
+      } else {
+        setDurationMin(+val);
+      }
+    }}
+    className={inputCls}
+  />
+</label>
           </div>
 
           <label className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
