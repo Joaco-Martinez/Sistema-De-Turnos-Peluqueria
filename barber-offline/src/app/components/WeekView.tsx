@@ -1,5 +1,5 @@
 'use client';
-import { Fragment, useEffect, useMemo, useState, MouseEvent } from 'react';
+import { Fragment, MouseEvent, useEffect, useMemo, useState } from 'react';
 import { DateTime } from 'luxon';
 import { getOccurrences } from '@/lib/schedule';
 import { endOfWeekISO, fmtDay, fmtTime, startOfWeekISO } from '@/lib/time';
@@ -43,9 +43,8 @@ export default function WeekView({ onChanged }: Props) {
 
   const isThisWeek = ref.hasSame(DateTime.now(), 'week');
 
-  // evitar que el click en un turno dispare el "agregar" de la celda
   const openEditor = (e: MouseEvent, data: EditTarget) => {
-    e.stopPropagation();
+    e.stopPropagation(); // evita que el click en el turno dispare "nuevo"
     setEditing(data);
   };
 
@@ -53,7 +52,7 @@ export default function WeekView({ onChanged }: Props) {
     <div className="space-y-3">
       {/* Toolbar */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        {/* Navegación tipo pill */}
+        {/* Navegación */}
         <nav
           aria-label="Navegación de semana"
           className="inline-flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-800
@@ -96,7 +95,7 @@ export default function WeekView({ onChanged }: Props) {
           })()}
         </nav>
 
-        {/* Rango de fecha + acción principal */}
+        {/* Rango + acción principal */}
         <div className="flex items-center gap-3">
           <span className="hidden sm:inline-flex items-center rounded-full border border-zinc-200 dark:border-zinc-800
                            bg-white/70 dark:bg-neutral-900/70 px-3 py-1 text-sm text-zinc-600 dark:text-zinc-300">
@@ -117,14 +116,14 @@ export default function WeekView({ onChanged }: Props) {
       {/* Contenedor con scroll horizontal en mobile */}
       <div className="card overflow-x-auto">
         <div className="min-w-[960px]">
-          {/* ⬇️ 'isolate' para que el z-index de los bloques funcione en iOS */}
+          {/* isolate = stacking context para z-index (clave en iOS) */}
           <div className="grid isolate" style={{ gridTemplateColumns: `72px repeat(${DAY_COLS}, 1fr)` }}>
             {/* encabezado */}
             <div className="h-10" />
             {days.map((d, i) => (
               <div
                 key={i}
-                className="h-10 px-2 flex items/end justify-center text-sm font-medium border-b border-zinc-200 dark:border-zinc-800"
+                className="h-10 px-2 flex items-end justify-center text-sm font-medium border-b border-zinc-200 dark:border-zinc-800"
               >
                 {fmtDay(d.toISO()!)}
               </div>
@@ -145,13 +144,20 @@ export default function WeekView({ onChanged }: Props) {
 
                   {days.map((d, di) => {
                     const isTodayCol = d.hasSame(DateTime.now(), 'day');
+
+                    // ¿Hay un turno que COMIENZA en esta celda? (para subir z-index del contenedor)
+                    const startsHere = items.some(i => {
+                      const s = DateTime.fromISO(i.start);
+                      return s.hasSame(d, 'day') && s.hour === hour && s.minute === minute;
+                    });
+
                     return (
                       <div
                         key={`${row}-${di}`}
-                        // ⬇️ overflow-visible + z-0 para que los bloques se vean completos en iOS
-                        className={`h-12 border border-l-0 border-t-0 border-zinc-200 dark:border-zinc-800 relative overflow-visible z-0
+                        // overflow-visible para que el bloque se extienda; z-20 si hay bloque aquí (padre por encima de filas siguientes en iOS)
+                        className={`h-12 border border-l-0 border-t-0 border-zinc-200 dark:border-zinc-800 relative overflow-visible ${startsHere ? 'z-20' : 'z-0'}
                                     ${isTodayCol ? 'bg-sky-50 dark:bg-sky-950/20' : 'bg-white/40 dark:bg-neutral-900/40'}`}
-                        // 👇 1 solo click para crear turno
+                        // 1 solo click: crear turno
                         onClick={() => setOpenFormAt(slotISO(d, hour, minute))}
                         title="Click para nuevo turno"
                       >
@@ -179,7 +185,7 @@ export default function WeekView({ onChanged }: Props) {
                                     title: i.title,
                                   })
                                 }
-                                // ⬇️ top-0 + z-20: evita recorte y superpone sobre filas siguientes
+                                // top-0 + z-20 = el bloque queda arriba y no se corta
                                 className={`absolute inset-x-1 top-0 z-20 text-left rounded-xl px-2 py-1 text-xs shadow-sm border
                                   ${isPast
                                     ? 'border-zinc-300 bg-zinc-200/50 text-zinc-700 dark:border-zinc-700 dark:bg-neutral-800/40 dark:text-zinc-300'
