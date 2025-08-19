@@ -1,5 +1,5 @@
 'use client';
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState, MouseEvent } from 'react';
 import { DateTime } from 'luxon';
 import { getOccurrences } from '@/lib/schedule';
 import { endOfWeekISO, fmtDay, fmtTime, startOfWeekISO } from '@/lib/time';
@@ -43,55 +43,58 @@ export default function WeekView({ onChanged }: Props) {
 
   const isThisWeek = ref.hasSame(DateTime.now(), 'week');
 
+  // evitar que el click en un turno dispare el "agregar" de la celda
+  const openEditor = (e: MouseEvent, data: EditTarget) => {
+    e.stopPropagation();
+    setEditing(data);
+  };
+
   return (
     <div className="space-y-3">
       {/* Toolbar */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         {/* Navegación tipo pill */}
         <nav
-  aria-label="Navegación de semana"
-  className="inline-flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-800
-             bg-white/70 dark:bg-neutral-900/70 p-0.5 shadow-sm backdrop-blur"
->
-  {/** estilos base */}
-  {(() => {
-    const base =
-      'px-3 py-1.5 rounded-full text-sm transition focus:outline-none ' +
-      'focus-visible:ring-2 focus-visible:ring-sky-500';
-    const ghost = 'hover:bg-zinc-100 dark:hover:bg-neutral-800';
-    const active = 'bg-sky-600 text-white shadow hover:bg-sky-500';
-
-    return (
-      <>
-        <button
-          aria-label="Semana anterior"
-          onClick={() => setRef(ref.minus({ weeks: 1 }))}
-          className={`${base} ${ghost} min-w-[96px] text-left`}
-          title="Semana anterior"
+          aria-label="Navegación de semana"
+          className="inline-flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-800
+                     bg-white/70 dark:bg-neutral-900/70 p-0.5 shadow-sm backdrop-blur"
         >
-          ‹ Semana
-        </button>
+          {(() => {
+            const base =
+              'px-3 py-1.5 rounded-full text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500';
+            const ghost = 'hover:bg-zinc-100 dark:hover:bg-neutral-800';
+            const active = 'bg-sky-600 text-white shadow hover:bg-sky-500';
+            return (
+              <>
+                <button
+                  aria-label="Semana anterior"
+                  onClick={() => setRef(ref.minus({ weeks: 1 }))}
+                  className={`${base} ${ghost} min-w-[96px] text-left`}
+                  title="Semana anterior"
+                >
+                  ‹ Semana
+                </button>
 
-        <button
-          onClick={() => setRef(DateTime.now())}
-          title="Ir a hoy"
-          className={`${base} ${isThisWeek ? active : ghost} font-medium px-4 min-w-[72px] text-center`}
-        >
-          Hoy
-        </button>
+                <button
+                  onClick={() => setRef(DateTime.now())}
+                  title="Ir a hoy"
+                  className={`${base} ${isThisWeek ? active : ghost} font-medium px-4 min-w-[72px] text-center`}
+                >
+                  Hoy
+                </button>
 
-        <button
-          aria-label="Semana siguiente"
-          onClick={() => setRef(ref.plus({ weeks: 1 }))}
-          className={`${base} ${ghost} min-w-[96px] text-right`}
-          title="Semana siguiente"
-        >
-          Semana ›
-        </button>
-      </>
-    );
-  })()}
-</nav>
+                <button
+                  aria-label="Semana siguiente"
+                  onClick={() => setRef(ref.plus({ weeks: 1 }))}
+                  className={`${base} ${ghost} min-w-[96px] text-right`}
+                  title="Semana siguiente"
+                >
+                  Semana ›
+                </button>
+              </>
+            );
+          })()}
+        </nav>
 
         {/* Rango de fecha + acción principal */}
         <div className="flex items-center gap-3">
@@ -114,15 +117,16 @@ export default function WeekView({ onChanged }: Props) {
       {/* Contenedor con scroll horizontal en mobile */}
       <div className="card overflow-x-auto">
         <div className="min-w-[960px]">
-          <div className="grid" style={{ gridTemplateColumns: `72px repeat(${DAY_COLS}, 1fr)` }}>
+          {/* ⬇️ 'isolate' para que el z-index de los bloques funcione en iOS */}
+          <div className="grid isolate" style={{ gridTemplateColumns: `72px repeat(${DAY_COLS}, 1fr)` }}>
             {/* encabezado */}
             <div className="h-10" />
             {days.map((d, i) => (
               <div
                 key={i}
-                className="h-10 px-2 flex items-end justify-center text-sm font-medium border-b border-zinc-200 dark:border-zinc-800"
+                className="h-10 px-2 flex items/end justify-center text-sm font-medium border-b border-zinc-200 dark:border-zinc-800"
               >
-                {fmtDay(d.toISO()!)}{/* usa español si seteaste Settings.defaultLocale = 'es' */}
+                {fmtDay(d.toISO()!)}
               </div>
             ))}
 
@@ -144,10 +148,12 @@ export default function WeekView({ onChanged }: Props) {
                     return (
                       <div
                         key={`${row}-${di}`}
-                        className={`h-12 border border-l-0 border-t-0 border-zinc-200 dark:border-zinc-800 relative
+                        // ⬇️ overflow-visible + z-0 para que los bloques se vean completos en iOS
+                        className={`h-12 border border-l-0 border-t-0 border-zinc-200 dark:border-zinc-800 relative overflow-visible z-0
                                     ${isTodayCol ? 'bg-sky-50 dark:bg-sky-950/20' : 'bg-white/40 dark:bg-neutral-900/40'}`}
-                        onDoubleClick={() => setOpenFormAt(slotISO(d, hour, minute))}
-                        title="Doble click para nuevo turno"
+                        // 👇 1 solo click para crear turno
+                        onClick={() => setOpenFormAt(slotISO(d, hour, minute))}
+                        title="Click para nuevo turno"
                       >
                         {/* bloques que empiezan en esta celda */}
                         {items
@@ -165,19 +171,20 @@ export default function WeekView({ onChanged }: Props) {
                             return (
                               <button
                                 key={i.id}
-                                onClick={() =>
-                                  setEditing({
+                                onClick={(e) =>
+                                  openEditor(e, {
                                     baseId: i.id.split('::')[0],
                                     start: i.start,
                                     end: i.end,
                                     title: i.title,
                                   })
                                 }
-                                className={`absolute inset-x-1 -top-px text-left rounded-xl px-2 py-1 text-xs shadow-sm border
+                                // ⬇️ top-0 + z-20: evita recorte y superpone sobre filas siguientes
+                                className={`absolute inset-x-1 top-0 z-20 text-left rounded-xl px-2 py-1 text-xs shadow-sm border
                                   ${isPast
                                     ? 'border-zinc-300 bg-zinc-200/50 text-zinc-700 dark:border-zinc-700 dark:bg-neutral-800/40 dark:text-zinc-300'
                                     : 'border-sky-400/60 bg-sky-500/15 hover:bg-sky-500/20 text-zinc-900 dark:text-zinc-100'}`}
-                                style={{ height: `${rows * 3}rem` }}
+                                style={{ height: `${rows * 3}rem` }}  // 3rem = alto de fila (h-12)
                                 title="Abrir turno"
                               >
                                 <div className="font-medium line-clamp-1">{i.title ?? 'Turno'}</div>
