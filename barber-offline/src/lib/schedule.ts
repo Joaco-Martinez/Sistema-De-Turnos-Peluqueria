@@ -44,33 +44,87 @@ export function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: str
 
 // Genera ocurrencias visibles entre rangeStartISO y rangeEndISO
 export async function getOccurrences(rangeStartISO: string, rangeEndISO: string) {
-  const [apps, exs] = await Promise.all([db.appointments.toArray(), db.exceptions.toArray()]);
-  const out: Array<{id:string; start: string; end: string; title?: string; clientId?: string}> = [];
+  const [apps, exs] = await Promise.all([
+    db.appointments.toArray(),
+    db.exceptions.toArray()
+  ]);
+
+  const out: Array<{
+    id: string;
+    start: string;
+    end: string;
+    title?: string;
+    clientId?: string;
+    status?: string;
+    price?: number;
+  }> = [];
+
   const rStart = DateTime.fromISO(rangeStartISO);
   const rEnd   = DateTime.fromISO(rangeEndISO);
+  const now    = DateTime.now();
 
   for (const a of apps) {
     const duration = a.durationMin;
+    const start = DateTime.fromISO(a.startDateTime);
+    const end   = start.plus({ minutes: duration });
+
+    // ✅ Marcar como "done" si ya pasó
+    if ((!a.status || a.status === 'pending') && end < now) {
+      await db.appointments.update(a.id, { status: 'done' });
+      a.status = 'done';
+    }
+
+    // ---- Caso: no recurrente ----
     if (!a.isRecurring) {
-      const s = DateTime.fromISO(a.startDateTime);
-      const e = s.plus({ minutes: duration });
-      if (e > rStart && s < rEnd) out.push({ id: a.id, start: s.toISO()!, end: e.toISO()!, title: a.title, clientId: a.clientId });
+      if (end > rStart && start < rEnd) {
+        out.push({
+          id: a.id,
+          start: start.toISO()!,
+          end: end.toISO()!,
+          title: a.title,
+          clientId: a.clientId,
+          status: a.status,
+        });
+      }
       continue;
     }
+
+    // ---- Caso: recurrente ----
     const rule = toRRule(a);
     if (!rule) continue;
     const dates = rule.between(rStart.toJSDate(), rEnd.toJSDate(), true);
+
     for (const d of dates) {
       const s = DateTime.fromJSDate(d);
       const keyISO = s.toISO()!;
-      const related = exs.filter(x => x.appointmentId === a.id && x.originalDateTime === keyISO);
-      if (related.find(x => x.type === 'skip')) continue;
-      const move = related.find(x => x.type === 'move');
-      const start = move?.newStartDateTime ? DateTime.fromISO(move.newStartDateTime) : s;
+      const related = exs.filter(
+        (x) => x.appointmentId === a.id && x.originalDateTime === keyISO
+      );
+      if (related.find((x) => x.type === "skip")) continue;
+
+      const move = related.find((x) => x.type === "move");
+      const start2 = move?.newStartDateTime
+        ? DateTime.fromISO(move.newStartDateTime)
+        : s;
       const dur = move?.newDurationMin ?? duration;
-      const end = start.plus({ minutes: dur });
-      out.push({ id: a.id + '::' + keyISO, start: start.toISO()!, end: end.toISO()!, title: a.title, clientId: a.clientId });
+      const end2 = start2.plus({ minutes: dur });
+
+      // también aplicamos chequeo de vencido
+      let status = a.status;
+      if ((!status || status === 'pending') && end2 < now) {
+        status = 'done';
+      }
+
+      out.push({
+        id: a.id + "::" + keyISO,
+        start: start2.toISO()!,
+        end: end2.toISO()!,
+        title: a.title,
+        clientId: a.clientId,
+        status,
+      });
     }
   }
+
   return out;
 }

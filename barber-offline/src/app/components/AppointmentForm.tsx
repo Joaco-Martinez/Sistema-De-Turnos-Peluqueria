@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { db, Appointment } from '@/lib/db';
+import { db, Appointment, Service } from '@/lib/db';
 import { DateTime } from 'luxon';
 import { nanoid } from 'nanoid';
 import { isSlotAvailable } from '@/lib/schedule';
@@ -28,6 +28,10 @@ export default function AppointmentForm({
   const [interval, setInterval] = useState(1);
   const [byweekday, setByweekday] = useState<number[]>([DateTime.fromISO(startISO).weekday % 7]);
   const [error, setError] = useState<string | null>(null);
+
+  // ---- Servicios ----
+  const [services, setServices] = useState<Service[]>([]);
+  const [serviceId, setServiceId] = useState<string>('');
 
   // helpers de estilo
   const inputCls =
@@ -57,8 +61,17 @@ export default function AppointmentForm({
         setByweekday(base.rrule.byweekday ?? [DateTime.fromISO(base.startDateTime).weekday % 7]);
       }
       setStartISO(occurrenceStartISO ?? base.startDateTime);
+      setServiceId(base.serviceId ?? '');
     })();
   }, [editingBaseId, occurrenceStartISO]);
+
+  // Cargar servicios al montar
+  useEffect(() => {
+    (async () => {
+      const all = await db.services.toArray();
+      setServices(all);
+    })();
+  }, []);
 
   useEffect(() => {
     if (!editingBaseId && isRecurring && freq === 'WEEKLY') {
@@ -70,6 +83,11 @@ export default function AppointmentForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!serviceId) {
+      setError('Tenés que seleccionar un servicio.');
+      return;
+    }
 
     const free = await isSlotAvailable(startISO, durationMin, editingBaseId);
     if (!free) {
@@ -84,6 +102,7 @@ export default function AppointmentForm({
       durationMin,
       isRecurring,
       rrule: isRecurring ? { freq, interval, byweekday } : undefined,
+      serviceId, // 🔥 se guarda el servicio elegido
     };
 
     await db.appointments.put(payload);
@@ -154,6 +173,23 @@ export default function AppointmentForm({
             />
           </label>
 
+          {/* Servicio */}
+          <label className="block">
+            <span className="text-sm text-zinc-700 dark:text-zinc-300">Servicio</span>
+            <select
+              value={serviceId}
+              onChange={(e) => setServiceId(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">Seleccioná un servicio...</option>
+              {services.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} — {s.price}$
+                </option>
+              ))}
+            </select>
+          </label>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block">
               <span className="text-sm text-zinc-700 dark:text-zinc-300">Inicio</span>
@@ -169,26 +205,27 @@ export default function AppointmentForm({
                 className={inputCls}
               />
             </label>
-           <label className="block">
-  <span className="text-sm text-zinc-700 dark:text-zinc-300">Duración (min)</span>
-  <input
-    type="number"
-    min={15}
-    step={15}
-    value={durationMin === null || Number.isNaN(durationMin) ? "" : durationMin}
-    onChange={(e) => {
-      const val = e.target.value;
-      if (val === "") {
-        setDurationMin(NaN); // guardo NaN internamente
-      } else {
-        setDurationMin(+val);
-      }
-    }}
-    className={inputCls}
-  />
-</label>
+            <label className="block">
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">Duración (min)</span>
+              <input
+                type="number"
+                min={15}
+                step={15}
+                value={durationMin === null || Number.isNaN(durationMin) ? "" : durationMin}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "") {
+                    setDurationMin(NaN);
+                  } else {
+                    setDurationMin(+val);
+                  }
+                }}
+                className={inputCls}
+              />
+            </label>
           </div>
 
+          {/* Repetición */}
           <label className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
             <input type="checkbox" className="accent-sky-600" checked={isRecurring}
                    onChange={(e) => setIsRecurring(e.target.checked)} />

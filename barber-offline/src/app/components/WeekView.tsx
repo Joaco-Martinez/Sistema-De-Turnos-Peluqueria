@@ -5,23 +5,35 @@ import { getOccurrences } from '@/lib/schedule';
 import { endOfWeekISO, fmtDay, fmtTime, startOfWeekISO } from '@/lib/time';
 import AppointmentForm from './AppointmentForm';
 
-type Occ = { id: string; start: string; end: string; title?: string; clientId?: string };
+type Occ = {
+  id: string;
+  start: string;
+  end: string;
+  title?: string;
+  clientId?: string;
+  status?: 'pending' | 'done' | 'cancelled';
+  price?: number;
+};
 type EditTarget = { baseId: string; start: string; end: string; title?: string };
 type Props = { onChanged?: () => void };
 
 const DAY_COLS = 7;
 const SLOT_MIN = 15;
 const START_HOUR = 7;
-const END_HOUR = 21;
+const END_HOUR = 24;
 
 function slotISO(day: DateTime, hour: number, minute: number): string {
-  return day.set({ hour, minute, second: 0, millisecond: 0 }).toISO({ suppressMilliseconds: true })!;
+  return day
+    .set({ hour, minute, second: 0, millisecond: 0 })
+    .toISO({ suppressMilliseconds: true })!;
 }
 function nextQuarterISO(ref = DateTime.now()): string {
   const q = Math.ceil(ref.minute / 15) * 15;
   const hour = ref.hour + Math.floor(q / 60);
   const minute = q % 60;
-  return ref.set({ hour, minute, second: 0, millisecond: 0 }).toISO({ suppressMilliseconds: true })!;
+  return ref
+    .set({ hour, minute, second: 0, millisecond: 0 })
+    .toISO({ suppressMilliseconds: true })!;
 }
 
 export default function WeekView({ onChanged }: Props) {
@@ -30,14 +42,23 @@ export default function WeekView({ onChanged }: Props) {
   const [openFormAt, setOpenFormAt] = useState<string | undefined>();
   const [editing, setEditing] = useState<EditTarget | undefined>();
 
-  // ⬇️ Tema desde el contexto
-
-
   async function load() {
     const occs = await getOccurrences(startOfWeekISO(ref), endOfWeekISO(ref));
-    setItems(occs.sort((a, b) => a.start.localeCompare(b.start)));
+    setItems(
+      occs
+        .map((occ) => ({
+          ...occ,
+          status:
+            occ.status === 'pending' || occ.status === 'done' || occ.status === 'cancelled'
+              ? occ.status as 'pending' | 'done' | 'cancelled'
+              : undefined,
+        }))
+        .sort((a, b) => a.start.localeCompare(b.start))
+    );
   }
-  useEffect(() => { load(); }, [ref]);
+  useEffect(() => {
+    load();
+  }, [ref]);
 
   const days = useMemo(() => {
     const start = ref.startOf('week');
@@ -80,7 +101,9 @@ export default function WeekView({ onChanged }: Props) {
                 <button
                   onClick={() => setRef(DateTime.now())}
                   title="Ir a hoy"
-                  className={`${base} ${isThisWeek ? active : ghost} font-medium px-4 min-w-[72px] text-center`}
+                  className={`${base} ${
+                    isThisWeek ? active : ghost
+                  } font-medium px-4 min-w-[72px] text-center`}
                 >
                   Hoy
                 </button>
@@ -98,15 +121,13 @@ export default function WeekView({ onChanged }: Props) {
           })()}
         </nav>
 
-        {/* Rango + acciones (incluye botón de tema del contexto) */}
+        {/* Rango + acciones */}
         <div className="flex items-center gap-3">
           <span className="hidden sm:inline-flex items-center rounded-full border border-zinc-200 dark:border-zinc-800
                            bg-white/70 dark:bg-neutral-900/70 px-3 py-1 text-sm text-zinc-600 dark:text-zinc-300">
-            {ref.startOf('week').setLocale('es').toFormat('dd LLL')} – {ref.endOf('week').setLocale('es').toFormat('dd LLL yyyy')}
+            {ref.startOf('week').setLocale('es').toFormat('dd LLL')} –{' '}
+            {ref.endOf('week').setLocale('es').toFormat('dd LLL yyyy')}
           </span>
-
-          {/* Toggle de tema usando el contexto */}
-       
 
           <button
             className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-sky-600 text-white hover:bg-sky-500 shadow-sm
@@ -119,11 +140,13 @@ export default function WeekView({ onChanged }: Props) {
         </div>
       </div>
 
-      {/* Contenedor con scroll horizontal en mobile */}
+      {/* Contenedor con scroll horizontal */}
       <div className="card overflow-x-auto">
         <div className="min-w-[960px]">
-          {/* isolate = stacking context para z-index (clave en iOS) */}
-          <div className="grid isolate" style={{ gridTemplateColumns: `72px repeat(${DAY_COLS}, 1fr)` }}>
+          <div
+            className="grid isolate"
+            style={{ gridTemplateColumns: `72px repeat(${DAY_COLS}, 1fr)` }}
+          >
             {/* encabezado */}
             <div className="h-10" />
             {days.map((d, i) => (
@@ -136,10 +159,14 @@ export default function WeekView({ onChanged }: Props) {
             ))}
 
             {/* filas */}
-            {Array.from({ length: (END_HOUR - START_HOUR) * 60 / SLOT_MIN }).map((_, row) => {
+            {Array.from({
+              length: ((END_HOUR - START_HOUR) * 60) / SLOT_MIN,
+            }).map((_, row) => {
               const minute = (row * SLOT_MIN) % 60;
-              const hour = Math.floor(row * SLOT_MIN / 60) + START_HOUR;
-              const label = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+              const hour = Math.floor((row * SLOT_MIN) / 60) + START_HOUR;
+              const label = `${String(hour).padStart(2, '0')}:${String(
+                minute
+              ).padStart(2, '0')}`;
 
               return (
                 <Fragment key={`row-${row}`}>
@@ -151,31 +178,62 @@ export default function WeekView({ onChanged }: Props) {
                   {days.map((d, di) => {
                     const isTodayCol = d.hasSame(DateTime.now(), 'day');
 
-                    const startsHere = items.some(i => {
+                    const startsHere = items.some((i) => {
                       const s = DateTime.fromISO(i.start);
-                      return s.hasSame(d, 'day') && s.hour === hour && s.minute === minute;
+                      return (
+                        s.hasSame(d, 'day') &&
+                        s.hour === hour &&
+                        s.minute === minute
+                      );
                     });
 
                     return (
                       <div
                         key={`${row}-${di}`}
-                        className={`h-12 border border-l-0 border-t-0 border-zinc-200 dark:border-zinc-800 relative overflow-visible ${startsHere ? 'z-20' : 'z-0'}
-                                    ${isTodayCol ? 'bg-sky-50 dark:bg-sky-950/20' : 'bg-white/40 dark:bg-neutral-900/40'}`}
-                        onClick={() => setOpenFormAt(slotISO(d, hour, minute))}
+                        className={`h-12 border border-l-0 border-t-0 border-zinc-200 dark:border-zinc-800 relative overflow-visible ${
+                          startsHere ? 'z-20' : 'z-0'
+                        }
+                                    ${
+                                      isTodayCol
+                                        ? 'bg-sky-50 dark:bg-sky-950/20'
+                                        : 'bg-white/40 dark:bg-neutral-900/40'
+                                    }`}
+                        onClick={() =>
+                          setOpenFormAt(slotISO(d, hour, minute))
+                        }
                         title="Click para nuevo turno"
                       >
-                        {/* bloques que empiezan en esta celda */}
+                        {/* bloques */}
                         {items
-                          .filter(i => {
+                          .filter((i) => {
                             const s = DateTime.fromISO(i.start);
-                            return s.hasSame(d, 'day') && s.hour === hour && s.minute === minute;
+                            return (
+                              s.hasSame(d, 'day') &&
+                              s.hour === hour &&
+                              s.minute === minute
+                            );
                           })
-                          .map(i => {
+                          .map((i) => {
                             const start = DateTime.fromISO(i.start);
                             const end = DateTime.fromISO(i.end);
                             const mins = end.diff(start, 'minutes').minutes;
-                            const rows = Math.max(1, Math.round(mins / SLOT_MIN));
-                            const isPast = end < DateTime.now();
+                            const rows = Math.max(
+                              1,
+                              Math.round(mins / SLOT_MIN)
+                            );
+
+                            // 🎨 Color según estado
+                            let statusClasses = '';
+                            if (i.status === 'done') {
+                              statusClasses =
+                                'border-green-400 bg-green-200/50 text-green-800 dark:border-green-600 dark:bg-green-900/40 dark:text-green-200';
+                            } else if (i.status === 'cancelled') {
+                              statusClasses =
+                                'border-red-400 bg-red-200/50 text-red-800 dark:border-red-600 dark:bg-red-900/40 dark:text-red-200';
+                            } else {
+                              statusClasses =
+                                'border-sky-400/60 bg-sky-500/15 hover:bg-sky-500/20 text-zinc-900 dark:text-zinc-100';
+                            }
 
                             return (
                               <button
@@ -188,15 +246,16 @@ export default function WeekView({ onChanged }: Props) {
                                     title: i.title,
                                   })
                                 }
-                                className={`absolute inset-x-1 top-0 z-20 text-left rounded-xl px-2 py-1 text-xs shadow-sm border
-                                  ${isPast
-                                    ? 'border-zinc-300 bg-zinc-200/50 text-zinc-700 dark:border-zinc-700 dark:bg-neutral-800/40 dark:text-zinc-300'
-                                    : 'border-sky-400/60 bg-sky-500/15 hover:bg-sky-500/20 text-zinc-900 dark:text-zinc-100'}`}
-                                style={{ height: `${rows * 3}rem` }}  // 3rem = alto de fila (h-12)
+                                className={`absolute inset-x-1 top-0 z-20 text-left rounded-xl px-2 py-1 text-xs shadow-sm border ${statusClasses}`}
+                                style={{ height: `${rows * 3}rem` }}
                                 title="Abrir turno"
                               >
-                                <div className="font-medium line-clamp-1">{i.title ?? 'Turno'}</div>
-                                <div className="opacity-70">{fmtTime(i.start)}–{fmtTime(i.end)}</div>
+                                <div className="font-medium line-clamp-1">
+                                  {i.title ?? 'Turno'}
+                                </div>
+                                <div className="opacity-70">
+                                  {fmtTime(i.start)}–{fmtTime(i.end)}
+                                </div>
                               </button>
                             );
                           })}
@@ -215,7 +274,11 @@ export default function WeekView({ onChanged }: Props) {
         <AppointmentForm
           defaultStart={openFormAt}
           onClose={() => setOpenFormAt(undefined)}
-          onSaved={() => { setOpenFormAt(undefined); load(); onChanged?.(); }}
+          onSaved={() => {
+            setOpenFormAt(undefined);
+            load();
+            onChanged?.();
+          }}
         />
       )}
 
@@ -226,7 +289,11 @@ export default function WeekView({ onChanged }: Props) {
           editingBaseId={editing.baseId}
           occurrenceStartISO={editing.start}
           onClose={() => setEditing(undefined)}
-          onSaved={() => { setEditing(undefined); load(); onChanged?.(); }}
+          onSaved={() => {
+            setEditing(undefined);
+            load();
+            onChanged?.();
+          }}
         />
       )}
     </div>
