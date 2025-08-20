@@ -50,14 +50,15 @@ export async function getOccurrences(rangeStartISO: string, rangeEndISO: string)
   ]);
 
   const out: Array<{
-    id: string;
-    start: string;
-    end: string;
-    title?: string;
-    clientId?: string;
-    status?: string;
-    price?: number;
-  }> = [];
+  id: string;
+  start: string;
+  end: string;
+  title?: string;
+  clientId?: string;
+  serviceId: string;   // 👈 nuevo
+  status?: string;
+  price?: number;
+}> = [];
 
   const rStart = DateTime.fromISO(rangeStartISO);
   const rEnd   = DateTime.fromISO(rangeEndISO);
@@ -68,22 +69,22 @@ export async function getOccurrences(rangeStartISO: string, rangeEndISO: string)
     const start = DateTime.fromISO(a.startDateTime);
     const end   = start.plus({ minutes: duration });
 
-    // ✅ Marcar como "done" si ya pasó
-    if ((!a.status || a.status === 'pending') && end < now) {
-      await db.appointments.update(a.id, { status: 'done' });
-      a.status = 'done';
-    }
-
     // ---- Caso: no recurrente ----
     if (!a.isRecurring) {
+      let status = a.status ?? 'pending';
+      if (status === 'pending' && end < now) {
+        status = 'done'; // marcar automáticamente si ya pasó
+        await db.appointments.update(a.id, { status });
+      }
       if (end > rStart && start < rEnd) {
         out.push({
           id: a.id,
           start: start.toISO()!,
           end: end.toISO()!,
           title: a.title,
+           serviceId: a.serviceId,
           clientId: a.clientId,
-          status: a.status,
+          status,
         });
       }
       continue;
@@ -109,9 +110,9 @@ export async function getOccurrences(rangeStartISO: string, rangeEndISO: string)
       const dur = move?.newDurationMin ?? duration;
       const end2 = start2.plus({ minutes: dur });
 
-      // también aplicamos chequeo de vencido
-      let status = a.status;
-      if ((!status || status === 'pending') && end2 < now) {
+      // 👇 status calculado por ocurrencia (NO toca la DB)
+      let status: 'pending' | 'done' = 'pending';
+      if (end2 < now) {
         status = 'done';
       }
 
@@ -120,6 +121,7 @@ export async function getOccurrences(rangeStartISO: string, rangeEndISO: string)
         start: start2.toISO()!,
         end: end2.toISO()!,
         title: a.title,
+         serviceId: a.serviceId,
         clientId: a.clientId,
         status,
       });

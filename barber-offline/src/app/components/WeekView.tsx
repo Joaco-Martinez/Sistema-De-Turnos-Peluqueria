@@ -50,7 +50,7 @@ export default function WeekView({ onChanged }: Props) {
           ...occ,
           status:
             occ.status === 'pending' || occ.status === 'done' || occ.status === 'cancelled'
-              ? occ.status as 'pending' | 'done' | 'cancelled'
+              ? (occ.status as 'pending' | 'done' | 'cancelled')
               : undefined,
         }))
         .sort((a, b) => a.start.localeCompare(b.start))

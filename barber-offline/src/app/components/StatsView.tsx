@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { getOccurrences } from '@/lib/schedule';
 import { db } from '../../lib/db';
 import {
   ResponsiveContainer,
@@ -37,41 +38,40 @@ const COLORS = [
   });
 
   // 🔥 función para cargar estadísticas
-  const loadStats = async (y: number, m: number) => {
-    const [apps, services] = await Promise.all([
-      db.appointments.where('status').equals('done').toArray(),
-      db.services.toArray()
-    ]);
+const loadStats = async (y: number, m: number) => {
+  const start = new Date(y, m - 1, 1).toISOString();
+  const end = new Date(y, m, 0, 23, 59, 59).toISOString();
 
-    // indexar servicios por id
-    const serviceMap: Record<string, { name: string; price: number }> = {};
-    services.forEach(s => {
-      serviceMap[s.id] = { name: s.name, price: s.price };
-    });
+  const occs = await getOccurrences(start, end);
+  const services = await db.services.toArray();
 
-    let total = 0;
-    let c = 0;
-    const map: Record<string, number> = {};
+  const serviceMap: Record<string, { name: string; price: number }> = {};
+  services.forEach(s => {
+    serviceMap[s.id] = { name: s.name, price: s.price };
+  });
 
-    apps.forEach(a => {
-      const d = new Date(a.startDateTime);
-      if (d.getFullYear() === y && d.getMonth() + 1 === m) {
-        const svc = serviceMap[a.serviceId];
-        if (!svc) return;
-        total += svc.price;
-        c++;
-        map[svc.name] = (map[svc.name] ?? 0) + svc.price;
-      }
-    });
+  let total = 0;
+  let c = 0;
+  const map: Record<string, number> = {};
 
-    setIncome(total);
-    setCount(c);
-    setTop(
-      Object.entries(map)
-        .map(([service, total]) => ({ service, total }))
-        .sort((a, b) => b.total - a.total)
-    );
-  };
+  occs.forEach(o => {
+    if (o.status === 'done') {
+      const svc = serviceMap[o.clientId ?? o.serviceId]; // depende cómo armes el out
+      if (!svc) return;
+      total += svc.price;
+      c++;
+      map[svc.name] = (map[svc.name] ?? 0) + svc.price;
+    }
+  });
+
+  setIncome(total);
+  setCount(c);
+  setTop(
+    Object.entries(map)
+      .map(([service, total]) => ({ service, total }))
+      .sort((a, b) => b.total - a.total)
+  );
+};
 
   useEffect(() => {
     loadStats(year, month);

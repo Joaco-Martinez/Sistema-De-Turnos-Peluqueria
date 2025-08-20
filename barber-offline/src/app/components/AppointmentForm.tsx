@@ -26,8 +26,9 @@ export default function AppointmentForm({
   const [isRecurring, setIsRecurring] = useState(false);
   const [freq, setFreq] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('WEEKLY');
   const [interval, setInterval] = useState(1);
-  const [byweekday, setByweekday] = useState<number[]>([DateTime.fromISO(startISO).weekday % 7]);
+  const [byweekday, setByweekday] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // ---- Servicios ----
   const [services, setServices] = useState<Service[]>([]);
@@ -40,11 +41,20 @@ export default function AppointmentForm({
     'placeholder-zinc-400 dark:placeholder-zinc-500 ' +
     'focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent';
 
-  const chipBase =
-    'px-2.5 py-1.5 rounded-lg text-sm border transition ' +
-    'border-zinc-300 dark:border-zinc-700 ' +
-    'bg-white dark:bg-neutral-900 hover:bg-zinc-50 dark:hover:bg-neutral-800';
-  const chipActive = 'bg-sky-600 text-white border-sky-600 hover:bg-sky-500';
+const chipBase = "px-3 py-1 rounded-full border text-sm transition-colors";
+const chipActive = "bg-sky-500 text-white border-sky-500 hover:bg-sky-600";
+const chipInactive = "bg-white border-sky-300 hover:bg-sky-100 dark:bg-neutral-900 dark:border-neutral-700 dark:hover:bg-sky-800";
+
+  
+  const days = [
+    { label: 'L', value: 0 },
+    { label: 'M', value: 1 },
+    { label: 'X', value: 2 },
+    { label: 'J', value: 3 },
+    { label: 'V', value: 4 },
+    { label: 'S', value: 5 },
+    { label: 'D', value: 6 },
+  ];
 
   // Cargar datos si es edición
   useEffect(() => {
@@ -58,7 +68,7 @@ export default function AppointmentForm({
       if (base.isRecurring && base.rrule) {
         setFreq(base.rrule.freq);
         setInterval(base.rrule.interval ?? 1);
-        setByweekday(base.rrule.byweekday ?? [DateTime.fromISO(base.startDateTime).weekday % 7]);
+        setByweekday(base.rrule.byweekday ?? []);
       }
       setStartISO(occurrenceStartISO ?? base.startDateTime);
       setServiceId(base.serviceId ?? '');
@@ -73,10 +83,10 @@ export default function AppointmentForm({
     })();
   }, []);
 
+  // Cuando arranca repetición semanal → no autoselecciona día
   useEffect(() => {
     if (!editingBaseId && isRecurring && freq === 'WEEKLY') {
-      const w = DateTime.fromISO(startISO).weekday % 7;
-      setByweekday([w]);
+      setByweekday([]);
     }
   }, [startISO, isRecurring, freq, editingBaseId]);
 
@@ -86,6 +96,11 @@ export default function AppointmentForm({
 
     if (!serviceId) {
       setError('Tenés que seleccionar un servicio.');
+      return;
+    }
+
+    if (isRecurring && freq === 'WEEKLY' && byweekday.length === 0) {
+      setError('Tenés que seleccionar al menos un día de la semana.');
       return;
     }
 
@@ -102,35 +117,47 @@ export default function AppointmentForm({
       durationMin,
       isRecurring,
       rrule: isRecurring ? { freq, interval, byweekday } : undefined,
-      serviceId, // 🔥 se guarda el servicio elegido
+      serviceId,
     };
 
     await db.appointments.put(payload);
     onSaved();
   }
 
-  async function handleDelete() {
-    if (!editingBaseId) { onClose(); return; }
-    const base = await db.appointments.get(editingBaseId);
-    if (!base) return;
 
-    if (base.isRecurring && occurrenceStartISO) {
-      if (!confirm('¿Cancelar SOLO esta ocurrencia?')) return;
+  
+async function confirmDelete(choice: 'uno' | 'todos' | 'actual') {
+  if (!editingBaseId) return;
+  const base = await db.appointments.get(editingBaseId);
+  if (!base) return;
+
+  if (base.isRecurring) {
+    if (choice === 'uno' && occurrenceStartISO) {
       await db.exceptions.add({
         id: nanoid(),
         appointmentId: base.id,
         originalDateTime: occurrenceStartISO,
         type: 'skip',
       });
-    } else {
-      const msg = base.isRecurring
-        ? 'Esto eliminará TODA la serie. ¿Confirmás?'
-        : '¿Eliminar este turno?';
-      if (!confirm(msg)) return;
+    } else if (choice === 'todos') {
+      await db.appointments.delete(base.id);
+    } else if (choice === 'actual' && occurrenceStartISO) {
+      await db.appointments.put({
+        ...base,
+        id: nanoid(),
+        startDateTime: occurrenceStartISO,
+        isRecurring: false,
+        rrule: undefined,
+      });
       await db.appointments.delete(base.id);
     }
-    onSaved();
+  } else {
+    await db.appointments.delete(base.id);
   }
+
+  setShowDeleteModal(false);
+  onSaved();
+}
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4 bg-black/60 backdrop-blur-sm">
@@ -145,13 +172,14 @@ export default function AppointmentForm({
           </h2>
           {editingBaseId && (
             <button
-              type="button"
-              onClick={handleDelete}
-              className="px-2.5 py-1.5 rounded-lg border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm"
-              title="Eliminar o cancelar"
-            >
-              Eliminar/Cancelar
-            </button>
+  type="button"
+  onClick={() => setShowDeleteModal(true)}
+  className="px-2.5 py-1.5 rounded-lg border border-red-300 dark:border-red-700 
+             text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm"
+  title="Eliminar o cancelar"
+>
+  Eliminar/Cancelar
+</button>
           )}
         </div>
 
@@ -227,8 +255,12 @@ export default function AppointmentForm({
 
           {/* Repetición */}
           <label className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
-            <input type="checkbox" className="accent-sky-600" checked={isRecurring}
-                   onChange={(e) => setIsRecurring(e.target.checked)} />
+            <input
+              type="checkbox"
+              className="accent-sky-600"
+              checked={isRecurring}
+              onChange={(e) => setIsRecurring(e.target.checked)}
+            />
             <span>Repetir</span>
           </label>
 
@@ -250,7 +282,8 @@ export default function AppointmentForm({
                 <label className="block">
                   <span className="text-sm text-zinc-700 dark:text-zinc-300">Cada (intervalo)</span>
                   <input
-                    type="number" min={1}
+                    type="number"
+                    min={1}
                     value={interval}
                     onChange={(e) => setInterval(+e.target.value)}
                     className={inputCls}
@@ -259,21 +292,26 @@ export default function AppointmentForm({
               </div>
 
               {freq === 'WEEKLY' && (
-                <div className="flex flex-wrap gap-2">
-                  {['L','M','X','J','V','S','D'].map((d, i) => (
-                    <button
-                      type="button"
-                      key={i}
-                      onClick={() =>
-                        setByweekday((w) => (w.includes(i) ? w.filter((x) => x !== i) : [...w, i]))
-                      }
-                      className={`${chipBase} ${byweekday.includes(i) ? chipActive : ''}`}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
-              )}
+  <div className="flex flex-wrap gap-2">
+    {days.map(({ label, value }) => {
+      const isActive = byweekday.includes(value);
+      return (
+        <button
+          key={value}
+          type="button"
+          onClick={() =>
+            setByweekday((w) =>
+              w.includes(value) ? w.filter((x) => x !== value) : [...w, value]
+            )
+          }
+          className={`${chipBase} ${isActive ? chipActive : chipInactive}`}
+        >
+          {label}
+        </button>
+      );
+    })}
+  </div>
+)}
 
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 “Todos los jueves” → Semanal / 1 / J — “Cada 15 días” → Semanal / 2 (día de inicio).
@@ -284,17 +322,54 @@ export default function AppointmentForm({
 
         {/* Footer */}
         <div className="flex justify-end gap-2 p-4 border-t border-zinc-200 dark:border-zinc-800">
-          <button type="button" onClick={onClose}
-                  className="px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-neutral-800">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-neutral-800"
+          >
             Cancelar
           </button>
-          <button
-            className="px-3 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-500"
-          >
+          <button className="px-3 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-500">
             Guardar
           </button>
         </div>
       </form>
+      {showDeleteModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="bg-white dark:bg-neutral-900 p-6 rounded-xl shadow-xl space-y-4 w-full max-w-sm">
+      <h3 className="text-lg font-semibold">¿Qué querés hacer?</h3>
+      <p className="text-sm text-zinc-600 dark:text-zinc-300">
+        Este turno es parte de una serie recurrente.
+      </p>
+      <div className="space-y-2">
+        <button
+          onClick={() => confirmDelete('uno')}
+          className="w-full px-3 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-500"
+        >
+          Cancelar solo este
+        </button>
+        <button
+          onClick={() => confirmDelete('todos')}
+          className="w-full px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-500"
+        >
+          Borrar toda la serie
+        </button>
+        <button
+          onClick={() => confirmDelete('actual')}
+          className="w-full px-3 py-2 rounded-lg bg-yellow-500 text-white hover:bg-yellow-400"
+        >
+          Convertir en único
+        </button>
+      </div>
+      <button
+        onClick={() => setShowDeleteModal(false)}
+        className="mt-3 w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-neutral-800"
+      >
+        Cancelar
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 }
