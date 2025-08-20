@@ -41,6 +41,7 @@ export default function WeekView({ onChanged }: Props) {
   const [items, setItems] = useState<Occ[]>([]);
   const [openFormAt, setOpenFormAt] = useState<string | undefined>();
   const [editing, setEditing] = useState<EditTarget | undefined>();
+  const [scale, setScale] = useState(1); // 👈 control de zoom
 
   async function load() {
     const occs = await getOccurrences(startOfWeekISO(ref), endOfWeekISO(ref));
@@ -137,12 +138,36 @@ export default function WeekView({ onChanged }: Props) {
           >
             <span className="text-base leading-none">＋</span> Agregar turno
           </button>
+
+          {/* 👇 control de zoom */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setScale((s) => Math.max(0.5, s - 0.1))}
+              className="px-2 py-1 rounded bg-zinc-200 dark:bg-zinc-700"
+            >
+              −
+            </button>
+            <span className="text-sm">{Math.round(scale * 100)}%</span>
+            <button
+              onClick={() => setScale((s) => Math.min(2, s + 0.1))}
+              className="px-2 py-1 rounded bg-zinc-200 dark:bg-zinc-700"
+            >
+              ＋
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Contenedor con scroll horizontal */}
       <div className="card overflow-x-auto">
-        <div className="min-w-[960px]">
+        <div
+          className="origin-top-left"
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+            minWidth: '960px',
+          }}
+        >
           <div
             className="grid isolate"
             style={{ gridTemplateColumns: `72px repeat(${DAY_COLS}, 1fr)` }}
