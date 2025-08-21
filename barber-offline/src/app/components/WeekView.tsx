@@ -19,7 +19,7 @@ type Props = { onChanged?: () => void };
 
 const DAY_COLS = 7;
 const SLOT_MIN = 15;
-const START_HOUR = 7;
+const START_HOUR = 9;
 const END_HOUR = 24;
 
 function slotISO(day: DateTime, hour: number, minute: number): string {
